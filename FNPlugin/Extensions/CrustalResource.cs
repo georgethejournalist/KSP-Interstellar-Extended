@@ -6,9 +6,9 @@ using UnityEngine;
 
 namespace FNPlugin.Extensions
 {
-    class PlanetaryResource
+    class CrustalResource
     {
-        public PlanetaryResource(string resourcename, double abundance, string displayname)
+        public CrustalResource(string resourcename, double abundance, string displayname)
         {
             this.ResourceName = resourcename;
             this.ResourceAbundance = abundance;
@@ -16,7 +16,7 @@ namespace FNPlugin.Extensions
             this.Synonyms = new[] { resourcename }.ToList();
         }
 
-        public PlanetaryResource(PartResourceDefinition definition, double abundance)
+        public CrustalResource(PartResourceDefinition definition, double abundance)
         {
             this.ResourceName = definition.name;
             this.ResourceAbundance = abundance;
@@ -24,7 +24,7 @@ namespace FNPlugin.Extensions
             this.Synonyms = new[] { ResourceName, DisplayName }.Distinct().ToList();
         }
 
-        public PlanetaryResource(string resourcename, double abundance, string displayname, string[] synonyms)
+        public CrustalResource(string resourcename, double abundance, string displayname, string[] synonyms)
         {
             this.ResourceName = resourcename;
             this.ResourceAbundance = abundance;
