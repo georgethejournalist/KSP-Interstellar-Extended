@@ -93,19 +93,15 @@ namespace FNPlugin.Collectors
         }
 
         // internals
-        private double dResourceFlow = 0;
-        private double dCrustDensity; // 'density' of crust at the current spot
         private double dTotalWasteHeatProduction = 0; // total waste heat produced in the cycle
-        private double dAltitude = 0; // current terrain altitude
-        private double dFinalConcentration;
         private double dCrustalAmount = 0; // crust concentration at the current location
         private double localAbundance = 0;
         private int currentPlanetID;
 
         private bool bTouchDown = false; // helper bool, is the part touching the ground
 
-        protected Part _part;
-        protected Vessel _vessel;
+        //protected Part part;
+        //protected Vessel _vessel;
         protected String _status = "";
 
         private uint counter = 0; // helper counter for update cycles, so that we can only do some calculations once in a while
@@ -372,10 +368,10 @@ namespace FNPlugin.Collectors
             currentPlanetID = currentPlanet.flightGlobalsIndex;
 
             // get the power requirements (can be changed in the part cfg)
-            double dPowerRequirementsMW = (double)PluginHelper.PowerConsumptionMultiplier * mwRequirements;
+            double dPowerRequirementsMW = PluginHelper.PowerConsumptionMultiplier * mwRequirements;
 
             // calculate the provided power and consume it
-            double dPowerReceivedMW = Math.Max((double)consumeFNResource(dPowerRequirementsMW * TimeWarp.fixedDeltaTime, FNResourceManager.FNRESOURCE_MEGAJOULES), 0);
+            double dPowerReceivedMW = Math.Max(consumeFNResource(dPowerRequirementsMW * TimeWarp.fixedDeltaTime, FNResourceManager.FNRESOURCE_MEGAJOULES), 0);
             double dNormalisedRevievedPowerMW = dPowerReceivedMW / TimeWarp.fixedDeltaTime;
 
             // when the requirements are low enough, we can get the power needed from stock energy charge
@@ -386,7 +382,7 @@ namespace FNPlugin.Collectors
                 dPowerReceivedMW += (dReceivedKW / 1000);
             }
 
-            dLastPowerPercentage = offlineCollecting ? dLastPowerPercentage : (float)(dPowerReceivedMW / dPowerRequirementsMW / TimeWarp.fixedDeltaTime);
+            dLastPowerPercentage = offlineCollecting ? dLastPowerPercentage : (dPowerReceivedMW / dPowerRequirementsMW / TimeWarp.fixedDeltaTime);
 
             // if resolving offline collection, pass the saved value, because OnStart doesn't resolve the function CalculateCrustConcentration correctly
             if (offlineCollecting)
@@ -421,7 +417,7 @@ namespace FNPlugin.Collectors
                     continue;
                 
                 // calculate the spare room for this resource
-                double currentResourceSpareRoom = _part.GetConnectedResources(currentResourceName).Sum(r => r.maxAmount - r.amount) * currentDefinition.density;
+                double currentResourceSpareRoom = part.GetConnectedResources(currentResourceName).Sum(r => r.maxAmount - r.amount) * currentDefinition.density;
 
                 double currentResourcePercentage = 0;
 
@@ -455,7 +451,7 @@ namespace FNPlugin.Collectors
                 double currentResourceRate = dCrustalAmount * deltaTimeInSeconds * currentResourcePercentage * localAbundance;
 
                 // add the resource
-                currentResourceRate = -_part.RequestResource(currentResourceName, -currentResourceRate * deltaTimeInSeconds / currentDefinition.density, ResourceFlowMode.ALL_VESSEL) / deltaTimeInSeconds * currentDefinition.density;
+                currentResourceRate = -part.RequestResource(currentResourceName, -currentResourceRate * deltaTimeInSeconds / currentDefinition.density, ResourceFlowMode.ALL_VESSEL) / deltaTimeInSeconds * currentDefinition.density;
             }
 
             if (offlineCollecting) // if collecting offline, let the player know the details
@@ -466,7 +462,7 @@ namespace FNPlugin.Collectors
             // show in GUI
             strCollectingStatus = "Drilling the crust";
 
-            if (!CheatOptions.InfiniteElectricity)
+            if (!CheatOptions.InfiniteElectricity) // is this player using infinite electricity cheat mode?
             {
                 // set the GUI string to state the number of KWs received if the MW requirements were lower than 5, otherwise in MW
                 strReceivedPower = dPowerRequirementsMW < 5
@@ -474,7 +470,10 @@ namespace FNPlugin.Collectors
                     : (dLastPowerPercentage * dPowerRequirementsMW).ToString("0.0") + " MW / " + dPowerRequirementsMW.ToString("0.0") + " MW";
             }
             else
+            {
                 strReceivedPower = "Inf.";
+            }
+                
 
             /* This takes care of wasteheat production (but takes into account if waste heat mechanics weren't disabled in the cheat menu).
              * It's affected by two properties of the drill part - its power requirements and waste heat production percentage.
