@@ -94,11 +94,12 @@ namespace FNPlugin.Collectors
 
         // internals
         private double dResourceFlow = 0;
-        private double dCrustDensity; // 'density' of regolith at the current spot
+        private double dCrustDensity; // 'density' of crust at the current spot
         private double dTotalWasteHeatProduction = 0; // total waste heat produced in the cycle
         private double dAltitude = 0; // current terrain altitude
         private double dFinalConcentration;
         private double dCrustalAmount = 0; // crust concentration at the current location
+        private double localAbundance = 0;
         private int currentPlanetID;
 
         private bool bTouchDown = false; // helper bool, is the part touching the ground
@@ -175,7 +176,7 @@ namespace FNPlugin.Collectors
             /* Crust concentration doesn't really need to be calculated and updated in gui on every update. 
              * By hiding it behind a counter that only runs this code once per hundred cycles, it should be more performance friendly.
             */
-            if (++counter % 100 == 0) // increment counter then check if it is the tenth update
+            if (++counter % 100 == 0) // increment counter then check if it is the hundreth update
             {
                 dCrustalAmount = GetTotalCrustMinedPerTick(vessel.altitude, currentPlanet, drillSize, effectiveness);
 
@@ -320,9 +321,11 @@ namespace FNPlugin.Collectors
             return crustalAmount;
         }
 
-        private double AdjustConcentrationForLocation()
+        private double AdjustConcentrationForLocation(string resourceName)
         {
             double concentration = 0;
+            // update the values of the stock abundance request with those for the current resource
+            resourceRequest.ResourceName = resourceName;
             resourceRequest.BodyId = FlightGlobals.currentMainBody.flightGlobalsIndex;
             resourceRequest.Latitude = vessel.latitude;
             resourceRequest.Longitude = vessel.longitude;
@@ -336,7 +339,7 @@ namespace FNPlugin.Collectors
         {
             //double dAvgMunDistance = 13599840256;
             CelestialBody homeworld = FlightGlobals.Bodies.SingleOrDefault(b => b.isHomeWorld);
-            double homeplanetMass = homeworld.Radius; // This will usually be Kerbin, but players can always use custom planet packs
+            double homeplanetMass = homeworld.Mass; // This will usually be Kerbin, but players can always use custom planet packs with a custom homeplanet or resized systems
             double planetMass = planet.Mass;
 
            /* I decided to incorporate an altitude modifier (similarly to regolith collector before).
@@ -350,12 +353,15 @@ namespace FNPlugin.Collectors
             */
             double dAltModifier = (altitude + 500.0) / 2500.0;
 
+            // if the dAltModifier is negative (if we're somehow trying to mine in a crack under sea level, perhaps), assign 0, otherwise keep it as it is
+            dAltModifier = dAltModifier < 0 ? 0 : dAltModifier; 
+
             /* The actual concentration calculation is pretty simple. The more mass the current planet has in comparison to the homeworld, the more resources can be mined here.
              * While this might seem unfair to smaller moons and planets, this is actually somewhat realistic - bodies with smaller mass would be more porous,
              * so there might be lesser amount of heavier elements and less useful stuff to go around altogether.
              * This is then adjusted for the altitude modifier - there is simply more material to mine at high hills and mountains.
             */
-            double dConcentration = dAltModifier * (planetMass / homeplanetMass); // get a basic concentration. Should range from numbers lower than one for planets further away from the sun, to about 2.5 at Moho
+            double dConcentration = dAltModifier * (planetMass / homeplanetMass); // get a basic concentration. The more mass the current planet has, the more crustal resources to be found here
             return dConcentration;
         }
 
@@ -368,7 +374,7 @@ namespace FNPlugin.Collectors
             // get the power requirements (can be changed in the part cfg)
             double dPowerRequirementsMW = (double)PluginHelper.PowerConsumptionMultiplier * mwRequirements;
 
-            // calculate the provided power
+            // calculate the provided power and consume it
             double dPowerReceivedMW = Math.Max((double)consumeFNResource(dPowerRequirementsMW * TimeWarp.fixedDeltaTime, FNResourceManager.FNRESOURCE_MEGAJOULES), 0);
             double dNormalisedRevievedPowerMW = dPowerReceivedMW / TimeWarp.fixedDeltaTime;
 
@@ -419,6 +425,7 @@ namespace FNPlugin.Collectors
 
                 double currentResourcePercentage = 0;
 
+                // if we haven't been here before, calculate the percentages
                 if (currentPlanetID != lastPlanetID)
                 {
                     currentResourcePercentage = CrustalResourceHandler.getCrustalResourceContent(currentPlanetID, currentResourceName);
@@ -436,13 +443,16 @@ namespace FNPlugin.Collectors
                         currentResourcePercentage = percentage;
                     else
                     {
-                        Debug.Log("[KSPI] - Could not retrieve resource percentage from dictionary, setting to zero");
+                        Debug.Log("[KSPI] - Could not retrieve resource percentage from dictionary, setting to zero.");
                         currentResourcePercentage = 0;
                     }
                 }
 
+                // adjust the percentage for local abundance
+                localAbundance = AdjustConcentrationForLocation(currentResourceName);
+
                 // calculate the amount of the resource to collect
-                double currentResourceRate = dCrustalAmount * deltaTimeInSeconds * currentResourcePercentage;
+                double currentResourceRate = dCrustalAmount * deltaTimeInSeconds * currentResourcePercentage * localAbundance;
 
                 // add the resource
                 currentResourceRate = -_part.RequestResource(currentResourceName, -currentResourceRate * deltaTimeInSeconds / currentDefinition.density, ResourceFlowMode.ALL_VESSEL) / deltaTimeInSeconds * currentDefinition.density;
@@ -456,12 +466,17 @@ namespace FNPlugin.Collectors
             // show in GUI
             strCollectingStatus = "Drilling the crust";
 
-            // set the GUI string to state the number of KWs received if the MW requirements were lower than 5, otherwise in MW
-            strReceivedPower = dPowerRequirementsMW < 5
-                ? (dLastPowerPercentage * dPowerRequirementsMW * 1000).ToString("0.0") + " KW / " + (dPowerRequirementsMW * 1000).ToString("0.0") + " KW"
-                : (dLastPowerPercentage * dPowerRequirementsMW).ToString("0.0") + " MW / " + dPowerRequirementsMW.ToString("0.0") + " MW";
+            if (!CheatOptions.InfiniteElectricity)
+            {
+                // set the GUI string to state the number of KWs received if the MW requirements were lower than 5, otherwise in MW
+                strReceivedPower = dPowerRequirementsMW < 5
+                    ? (dLastPowerPercentage * dPowerRequirementsMW * 1000).ToString("0.0") + " KW / " + (dPowerRequirementsMW * 1000).ToString("0.0") + " KW"
+                    : (dLastPowerPercentage * dPowerRequirementsMW).ToString("0.0") + " MW / " + dPowerRequirementsMW.ToString("0.0") + " MW";
+            }
+            else
+                strReceivedPower = "Inf.";
 
-            /* This takes care of wasteheat production (but takes into account if waste heat mechanics weren't disabled).
+            /* This takes care of wasteheat production (but takes into account if waste heat mechanics weren't disabled in the cheat menu).
              * It's affected by two properties of the drill part - its power requirements and waste heat production percentage.
              * More power hungry drills will produce more heat. More effective drills will produce less heat. More effective power hungry drills should produce
              * less heat than less effective power hungry drills. This should allow us to bring some variety into parts, if we want to.
