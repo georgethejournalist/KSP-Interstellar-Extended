@@ -20,10 +20,6 @@ namespace FNPlugin.Collectors
         [KSPField(isPersistant = true)]
         private double dLastConcentrationCrust = 0;
         [KSPField(isPersistant = true)]
-        IDictionary<string, double> resourcePercentages = new Dictionary<string, double>(); // create a new persistent list for keeping track of percentages
-        [KSPField(isPersistant = true)]
-        List<CrustalResource> localResources;
-        [KSPField(isPersistant = true)]
         int lastPlanetID = -1;
 
 
@@ -123,13 +119,21 @@ namespace FNPlugin.Collectors
             CheckForLock = false
         };
 
-
+        //[KSPField(isPersistant = true)]
+        IDictionary<string, double> resourcePercentages; // create a new persistent list for keeping track of percentages
+        List<CrustalResource> localResources;
         // end of internals
 
         public override void OnStart(PartModule.StartState state)
-        {
+        {            
             if (state == StartState.Editor) return; // collecting won't work in editor
+            List<CrustalResource> localResources = new List<CrustalResource>();
 
+            if (resourcePercentages == null) //|| localResources == null)
+            {
+                resourcePercentages = new Dictionary<string, double>();
+                //localResources = new List<CrustalResource>();
+            }
             this.part.force_activate();
 
             localStar = GetCurrentStar();
@@ -174,7 +178,7 @@ namespace FNPlugin.Collectors
             */
             if (++counter % 100 == 0) // increment counter then check if it is the hundreth update
             {
-                dCrustalAmount = GetTotalCrustMinedPerTick(vessel.altitude, currentPlanet, drillSize, effectiveness);
+                dCrustalAmount = GetTotalCrustMinedPerTick(vessel.altitude, FlightGlobals.currentMainBody, drillSize, effectiveness);
 
                 /* If collecting is legal, update the crust concentration in GUI, otherwise pass a zero string. 
                  * This way we shouldn't get readings when the vessel is flying or splashed or on a planet with an atmosphere.
@@ -202,17 +206,13 @@ namespace FNPlugin.Collectors
                     return;
                 }
 
-                // collect solar wind for a single frame
-                MineResources(TimeWarp.fixedDeltaTime, false);
-
                 // store current time in case vesel is unloaded
                 dLastActiveTime = (float)Planetarium.GetUniversalTime();
 
-                // store current solar wind concentration in case vessel is unloaded
-                //dLastConcentrationCrust = CalculateCrustConcentration(FlightGlobals.currentMainBody.position, localStar.transform.position, vessel.altitude);
-                dLastConcentrationCrust = GetTotalCrustMinedPerTick(vessel.altitude, currentPlanet, drillSize, effectiveness);
+                // store current crust mined per tick in case vessel is unloaded
+                dLastConcentrationCrust = GetTotalCrustMinedPerTick(vessel.altitude, FlightGlobals.currentMainBody, drillSize, effectiveness);
 
-                /* This bit will check if the regolith drill has not lost contact with ground. Raycasts are apparently not all that expensive, but still, 
+                /* This bit will check if the drill has not lost contact with ground. Raycasts are apparently not all that expensive, but still, 
                  * the counter will delay the check so that it runs only once per hundred cycles. This should be enough and should make it more performance friendly and
                  * also less prone to kraken glitches. It also makes sure that this doesn't run before the vessel is fully loaded and shown to the player.
                  */
@@ -226,6 +226,9 @@ namespace FNPlugin.Collectors
                         return;
                     }
                 }
+
+                // collect resources for a single frame
+                MineResources(TimeWarp.fixedDeltaTime, false);
             }
         }
 
@@ -260,11 +263,11 @@ namespace FNPlugin.Collectors
                 return bCanCollect;
             }
 
-            else if (FlightGlobals.currentMainBody.atmosphere == true) // won't collect in atmosphere
-            {
-                strCrustAbundance = "0";
-                return bCanCollect;
-            }
+            //else if (FlightGlobals.currentMainBody.atmosphere == true) // won't collect in atmosphere
+            //{
+            //    strCrustAbundance = "0";
+            //    return bCanCollect;
+            //}
             else
             {
                 bCanCollect = true;
@@ -335,6 +338,11 @@ namespace FNPlugin.Collectors
         {
             //double dAvgMunDistance = 13599840256;
             CelestialBody homeworld = FlightGlobals.Bodies.SingleOrDefault(b => b.isHomeWorld);
+            if (homeworld == null)
+            {
+                Console.WriteLine("[KSPI] - UniversalCrustExtractor/CalculateCrustConcentration(). Homeworld not found, setting concentration to 0.");
+                return 0;
+            }
             double homeplanetMass = homeworld.Mass; // This will usually be Kerbin, but players can always use custom planet packs with a custom homeplanet or resized systems
             double planetMass = planet.Mass;
 
@@ -399,10 +407,25 @@ namespace FNPlugin.Collectors
             if (currentPlanetID != lastPlanetID) 
             {
                 // instantiate the persistent list
-                localResources = new List<CrustalResource>();
+                //localResources = new List<CrustalResource>();
                 // get the resources that are here and add them to the list
-                localResources = CrustalResourceHandler.GetCrustalCompositionForBody(currentPlanet);
+                try
+                {
+                    localResources = CrustalResourceHandler.GetCrustalCompositionForBody(currentPlanet);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("[KSPI] - Error while getting Crustal Composition for this body. Msg: " + e.Message + e.StackTrace);
+                    return;
+                }                
             }
+
+            if (localResources == null)
+            {
+                Console.WriteLine("[KSPI] - Error, got a Crustal Composition, but it was null.");
+                return;
+            }
+            
 
             foreach (CrustalResource resource in localResources)
             {
