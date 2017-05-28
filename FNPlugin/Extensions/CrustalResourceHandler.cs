@@ -73,8 +73,10 @@ namespace FNPlugin.Extensions
 
                     // if no Crustal resource definition is created, create one based on celestialBody characteristics
                     if (bodyCrustalComposition.Sum(m => m.ResourceAbundance) < 0.5)
+                    {
                         bodyCrustalComposition = GenerateCompositionFromCelestialBody(celestialBody);
-
+                    }
+                        
                     // Add rare and isotopic resources
                     AddRaresAndIsotopesToCrustComposition(bodyCrustalComposition, celestialBody);
 
@@ -98,13 +100,13 @@ namespace FNPlugin.Extensions
         private static List<CrustalResource> CreateFromKspiCrustDefinitionFile(int refBody, CelestialBody celestialBody)
         {
             var bodyCrustalComposition = new List<CrustalResource>();
+            //CRUSTAL_RESOURCE_PACK_DEFINITION_KSPI
+            ConfigNode Crustal_resource_pack = GameDatabase.Instance.GetConfigNodes("CRUSTAL_RESOURCE_PACK_DEFINITION_KSPI").FirstOrDefault();
 
-            ConfigNode Crustal_resource_pack = GameDatabase.Instance.GetConfigNodes("Crustal_RESOURCE_PACK_DEFINITION_KSPI").FirstOrDefault();
-
-            Debug.Log("[KSPI] Loading Crustal data from pack: " + (Crustal_resource_pack.HasValue("name") ? Crustal_resource_pack.GetValue("name") : "unknown pack"));
+            //Debug.Log("[KSPI] - Loading Crustal data from pack: " + (Crustal_resource_pack.HasValue("name") ? Crustal_resource_pack.GetValue("name") : "unknown pack"));
             if (Crustal_resource_pack != null)
             {
-                Debug.Log("[KSPI] - searching for ocean definition for " + celestialBody.name);
+                //Debug.Log("[KSPI] - searching for crustal definition for " + celestialBody.name);
                 List<ConfigNode> Crustal_resource_list = Crustal_resource_pack.nodes.Cast<ConfigNode>().Where(res => res.GetValue("celestialBodyName") == FlightGlobals.Bodies[refBody].name).ToList();
                 if (Crustal_resource_list.Any())
                 {
@@ -150,12 +152,29 @@ namespace FNPlugin.Extensions
                     else if (celestialBody.atmosphereContainsOxygen)
                     {
                         // it is Earth-like, use Earth as a template
-                        bodyCrustalComposition = GetCrustalCompositionForBody(FlightGlobals.Bodies.Single(b => b.name == "Earth").flightGlobalsIndex);
+                        bool hasEarth = FlightGlobals.Bodies.Any(b => b.name == "Earth"); // is there a planet called Earth present in KSP?
+                        if (hasEarth)
+                        {
+                            bodyCrustalComposition = GetCrustalCompositionForBody(FlightGlobals.Bodies.Single(b => b.name == "Earth").flightGlobalsIndex);
+                        }
+                        else // if there is not, use the definition for Kerbin
+                        {
+                            bodyCrustalComposition = GetCrustalCompositionForBody(FlightGlobals.Bodies.Single(b => b.name == "Kerbin").flightGlobalsIndex);
+                        }
                     }
                     else 
                     {
                         // it is a Mars-like, use Mars as template
-                        bodyCrustalComposition = GetCrustalCompositionForBody(FlightGlobals.Bodies.Single(b => b.name == "Mars").flightGlobalsIndex);
+                        bool hasMars = FlightGlobals.Bodies.Any(b => b.name == "Mars"); // is there a planet called Mars present in KSP?
+                        if (hasMars)
+                        {
+                            bodyCrustalComposition = GetCrustalCompositionForBody(FlightGlobals.Bodies.Single(b => b.name == "Mars").flightGlobalsIndex);
+                        }
+                        else // if there is not, use the definition for Duna
+                        {
+                            bodyCrustalComposition = GetCrustalCompositionForBody(FlightGlobals.Bodies.Single(b => b.name == "Duna").flightGlobalsIndex);
+                        }
+                        
                     }
                 }
 
@@ -175,7 +194,7 @@ namespace FNPlugin.Extensions
                 AddResource(refBody, bodyCrustalComposition, InterstellarResourcesConfiguration.Instance.Water, "LqdWater", "H2O", "Water", "Water");
                 AddResource(refBody, bodyCrustalComposition, InterstellarResourcesConfiguration.Instance.HeavyWater, "DeuteriumWater", "D2O", "HeavyWater", "HeavyWater");
                 AddResource(refBody, bodyCrustalComposition, InterstellarResourcesConfiguration.Instance.Water, "LqdNitrogen", "NitrogenGas", "Nitrogen", "Nitrogen");
-                AddResource(refBody, bodyCrustalComposition, InterstellarResourcesConfiguration.Instance.LqdOxygen, "LqdOxygen", "OxygenGas", "Oxygen", "Oxygen");
+                AddResource(refBody, bodyCrustalComposition, InterstellarResourcesConfiguration.Instance.Oxygen, "LqdOxygen", "OxygenGas", "Oxygen", "Oxygen");
                 AddResource(refBody, bodyCrustalComposition, InterstellarResourcesConfiguration.Instance.CarbonDioxide, "LqdCO2", "CO2", "CarbonDioxide", "CarbonDioxide");
                 AddResource(refBody, bodyCrustalComposition, InterstellarResourcesConfiguration.Instance.CarbonMoxoxide, "LqdCO", "CO", "CarbonMonoxide", "CarbonMonoxide");
                 AddResource(refBody, bodyCrustalComposition, InterstellarResourcesConfiguration.Instance.Methane, "LqdMethane", "MethaneGas", "Methane", "Methane");
