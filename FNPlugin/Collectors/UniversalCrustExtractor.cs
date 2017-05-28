@@ -31,8 +31,22 @@ namespace FNPlugin.Collectors
         public double mwRequirements = 1.0; // MW requirements of the drill. Affects heat produced.
         [KSPField(isPersistant = false, guiActiveEditor = true, guiName = "Waste Heat Modifier", guiFormat = "P1")]
         public double wasteHeatModifier = 0.25; // How much of the power requirements ends up as heat. Change in part cfg, treat as a percentage (1 = 100%). Higher modifier means more energy ends up as waste heat.
-        [KSPField(isPersistant = false, guiActiveEditor = true, guiName = "Drill size", guiUnits = " m\xB3")]
+        [KSPField(isPersistant = false, guiActiveEditor = true, guiName = "Drill reach", guiUnits = " m\xB3")]
         public double drillReach = 5.0; // How far can the drill actually reach? Used in calculating raycasts to hit ground down below the part. The 5 is just about the reach of the generic drill. Change in part cfg for different models.
+
+        // GUI elements declaration
+        private Rect _window_position = new Rect(50, 50, labelWidth + valueWidth, 150);
+        private int _window_ID;
+        private bool _render_window;
+        private Vector2 scrollPosition;
+
+        private const int labelWidth = 200;
+        private const int valueWidth = 200;
+
+        private GUIStyle _bold_label;
+        private GUIStyle _enabled_button;
+        private GUIStyle _disabled_button;
+        // end of GUI elements declaration
 
         private AbundanceRequest resourceRequest = new AbundanceRequest // create a new request object that we'll reuse to get the current stock-system resource concentration
         {
@@ -59,6 +73,12 @@ namespace FNPlugin.Collectors
             bIsEnabled = false;
             OnFixedUpdate();
         }
+
+        [KSPEvent(guiActive = true, guiName = "Toggle Mining Interface", active = true)]
+        public void ToggleWindow()
+        {
+            _render_window = !_render_window;
+        }
         // *** END of KSP Events
 
         // *** KSP Actions ***
@@ -83,6 +103,9 @@ namespace FNPlugin.Collectors
                 // force activate this part if not in editor; otherwise the OnFixedUpdate etc. would not work
                 this.part.force_activate();
 
+                // create the id for the GUI window
+                _window_ID = new System.Random(part.GetInstanceID()).Next(int.MinValue, int.MaxValue);
+
                 if (bIsEnabled)
                 {
                     if (CheckForPreviousData())
@@ -99,8 +122,6 @@ namespace FNPlugin.Collectors
         {
             Events["ActivateCollector"].active = !bIsEnabled; // will activate the event (i.e. show the gui button) if the process is not enabled
             Events["DisableCollector"].active = bIsEnabled; // will show the button when the process IS enabled
-
-            // UpdateGUI
         }
 
         public override void OnFixedUpdate()
@@ -112,6 +133,15 @@ namespace FNPlugin.Collectors
                 // Save time data for offline mining
                 dLastActiveTime = Planetarium.GetUniversalTime();
             }
+        }
+
+        private void OnGUI()
+        {
+            if (this.vessel != FlightGlobals.ActiveVessel || !_render_window) return;
+
+            _window_position = GUILayout.Window(_window_ID, _window_position, DrawGUI, "Universal Mining Interface");
+
+            scrollPosition[1] = GUI.VerticalScrollbar(_window_position, scrollPosition[1], 1, 0, 150, "Scroll");
         }
 
         // *** STARTUP FUNCTIONS ***
@@ -595,6 +625,78 @@ namespace FNPlugin.Collectors
 
         }
 
+
+        private void DrawGUI(int window)
+        {
+            if (_bold_label == null)
+            {
+                _bold_label = new GUIStyle(GUI.skin.label);
+                _bold_label.fontStyle = FontStyle.Bold;
+            }
+
+            //if (_enabled_button == null)
+            //{
+            //    _enabled_button = new GUIStyle(GUI.skin.button);
+            //    _enabled_button.fontStyle = FontStyle.Bold;
+            //}
+
+            //if (_disabled_button == null)
+            //{
+            //    _disabled_button = new GUIStyle(GUI.skin.button);
+            //    _disabled_button.fontStyle = FontStyle.Normal;
+            //}
+
+            if (GUI.Button(new Rect(_window_position.width - 20, 2, 18, 18), "x"))
+            {
+                _render_window = false;
+            }
+                
+            
+            GUILayout.BeginVertical();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Drill parameters:",_bold_label, GUILayout.Width(labelWidth));
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Size: " + drillSize.ToString("#.#") + " m\xB3");
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("MW Requirements: " + mwRequirements.ToString("#.#") + " MW");
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Drill effectiveness: " + effectiveness.ToString("P1"));
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Resources for the current location:", _bold_label, GUILayout.Width(labelWidth));
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Name", _bold_label, GUILayout.Width(labelWidth));
+            GUILayout.Label("Avg. crustal abundance", _bold_label, GUILayout.Width(labelWidth));
+            GUILayout.EndHorizontal();
+
+            GetResourceData();
+
+            
+            //GUILayout.BeginScrollView(scrollPosition, GUILayout.Width(labelWidth + valueWidth), GUILayout.Height(150));
+            
+            if (localResources != null)
+            {
+                foreach (CrustalResource resource in localResources)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label(resource.DisplayName, GUILayout.Width(labelWidth));
+                    GUILayout.Label(resource.ResourceAbundance.ToString("##.######"));
+                    GUILayout.EndHorizontal();
+                }
+            }
+            //GUILayout.EndScrollView();
+
+            GUILayout.EndVertical();
+            GUI.DragWindow();
+
+        }
 
     }
 }
